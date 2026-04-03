@@ -209,7 +209,7 @@ function finalizeStageClear() {
     return;
   }
 
-  const recoveredHp = player ? Math.round(player.maxHp * 0.22) : 0;
+  const recoveredHp = player ? Math.max(72, Math.round(player.maxHp * 0.32)) : 0;
   if (player) {
     player.restoreHp(recoveredHp);
   }
@@ -314,6 +314,25 @@ function handlePlayerHits(hits) {
         hit.enemy.isBossEnemy?.() ? "#ffcf69" : hit.enemy.type === "bodyguard" ? "#ff9d4d" : "#fff1a5",
       );
       audio?.playKillSting?.(hit.enemy.isBossEnemy?.() ? "boss" : hit.enemy.type === "bodyguard" ? "bodyguard" : "minion");
+    }
+
+    if (hit.heal > 0) {
+      effects.addText({
+        x: hit.x + 10,
+        y: hit.y - 26,
+        vy: -1.05,
+        text: `+${hit.heal}`,
+        fontSize: Math.min(30, 18 + hit.heal * 0.45),
+        color: "#9effa1",
+        life: 760,
+        maxLife: 760,
+        strokeColor: "rgba(8, 32, 10, 0.92)",
+        fontWeight: 900,
+      });
+
+      if (hit.heal >= 8) {
+        effects.addWeaponPulse(hit.x, hit.y - 22, "DRAIN", "#a7ff91");
+      }
     }
 
     if (hit.finalBossDefeated) {

@@ -122,7 +122,7 @@ const ENEMY_CONFIG = {
     deathHoldMs: 1000,
     preferredDistanceMin: 200,
     preferredDistanceMax: 300,
-    projectileSpeed: 5.9,
+    projectileSpeed: 4.9,
     maxConcurrentAttackers: 1,
     boss: false,
   },
@@ -185,7 +185,7 @@ const ENEMY_CONFIG = {
     hurtboxInsetTop: 14,
     hurtboxInsetBottom: 10,
     deathHoldMs: 1600,
-    projectileSpeed: 6.2,
+    projectileSpeed: 5.6,
     hurtQuotes: GOLF_HURT_QUOTES,
     maxConcurrentAttackers: 1,
     boss: true,
@@ -218,7 +218,7 @@ const ENEMY_CONFIG = {
     hurtboxInsetTop: 14,
     hurtboxInsetBottom: 10,
     deathHoldMs: 1600,
-    projectileSpeed: 6.4,
+    projectileSpeed: 5.4,
     hurtQuotes: TWITTER_HURT_QUOTES,
     preferredDistanceMin: 180,
     preferredDistanceMax: 300,
@@ -1082,7 +1082,7 @@ export class Enemy {
             {
               mode: "burstProjectile",
               animKey: "attack",
-              damage: 9,
+              damage: 7,
               projectileKind: "phone",
               projectileSpeed: this.projectileSpeed * 0.88,
               fireAt: [0.34, 0.56],
@@ -1211,11 +1211,11 @@ export class Enemy {
               {
                 mode: "burstProjectile",
                 animKey: "attack",
-                damage: 9,
+                damage: 8,
                 projectileKind: "phone",
                 projectileSpeed: this.projectileSpeed * 0.92,
-                fireAt: [0.2, 0.34, 0.48, 0.62],
-                spreads: [-0.22, -0.08, 0.08, 0.22],
+                fireAt: [0.24, 0.44, 0.64],
+                spreads: [-0.2, 0, 0.2],
                 yBias: clamp(playerCenterY - (this.y + this.height * 0.38), -36, 36),
                 cooldown: 2550,
               },
@@ -1447,8 +1447,12 @@ export class Enemy {
 
   spawnProjectileToward(player, { kind, damage, speed, spread = 0, yBias = 0 }) {
     const origin = this.getMuzzlePosition();
-    const targetX = player.x + player.width / 2;
-    const targetY = player.y + player.height * 0.35 + yBias * 0.12;
+    const baseTargetX = player.x + player.width / 2;
+    const baseTargetY = (player.baseY ?? (player.y + player.height)) - player.height * 0.42;
+    const xJitter = kind === "phone" ? randomBetween(-34, 34) : randomBetween(-18, 18);
+    const yJitter = kind === "phone" ? randomBetween(-22, 22) : randomBetween(-14, 14);
+    const targetX = baseTargetX + xJitter;
+    const targetY = baseTargetY + yBias * 0.05 + yJitter;
     const base = normalizeVector(targetX - origin.x, targetY - origin.y, speed);
     const rotated = rotateVector(base.vx, base.vy, spread);
 
@@ -1466,7 +1470,7 @@ export class Enemy {
       damage,
       knockbackX: kind === "phone" ? (rotated.x >= 0 ? 1 : -1) : rotated.x >= 0 ? 6 : -6,
       stagger: kind === "phone" ? false : true,
-      life: 2200,
+      life: kind === "phone" ? 1800 : 2200,
       alive: true,
       consumeOnHit: true,
     });

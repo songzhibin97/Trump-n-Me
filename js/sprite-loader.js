@@ -32,33 +32,33 @@ const CLEANUP_OPTIONS = Object.freeze({
   bosses: {
     allowDarkSeeds: true,
     protectBottomRows: 0,
-    darkBrightnessMax: 56,
-    darkChromaMax: 18,
-    darkFloodDistance: 10,
+    darkBrightnessMax: 62,
+    darkChromaMax: 20,
+    darkFloodDistance: 12,
     preserveExplicitTrim: true,
     strictDarkFlood: true,
-    alphaTransparentMax: 28,
-    alphaOpaqueMin: 40,
-    matteBrightnessMax: 44,
-    matteChromaMax: 20,
-    matteNeighborMin: 4,
-    mattePasses: 3,
+    alphaTransparentMax: 40,
+    alphaOpaqueMin: 56,
+    matteBrightnessMax: 52,
+    matteChromaMax: 24,
+    matteNeighborMin: 3,
+    mattePasses: 4,
     matteProtectRadius: 2,
   },
   finalBoss: {
     allowDarkSeeds: true,
     protectBottomRows: 0,
-    darkBrightnessMax: 56,
-    darkChromaMax: 18,
-    darkFloodDistance: 10,
+    darkBrightnessMax: 62,
+    darkChromaMax: 20,
+    darkFloodDistance: 12,
     preserveExplicitTrim: true,
     strictDarkFlood: true,
-    alphaTransparentMax: 28,
-    alphaOpaqueMin: 40,
-    matteBrightnessMax: 44,
-    matteChromaMax: 20,
-    matteNeighborMin: 4,
-    mattePasses: 3,
+    alphaTransparentMax: 40,
+    alphaOpaqueMin: 56,
+    matteBrightnessMax: 52,
+    matteChromaMax: 24,
+    matteNeighborMin: 3,
+    mattePasses: 4,
     matteProtectRadius: 2,
   },
 });
@@ -396,11 +396,6 @@ function cleanupFrame(ctx, frame, options = {}, preserveExplicitTrimOverride = n
 
   ctx.putImageData(imageData, frame.x, frame.y);
 
-  if (explicitTrim && preserveExplicitTrim) {
-    frame.trim = explicitTrim;
-    return;
-  }
-
   let minX = width;
   let minY = height;
   let maxX = -1;
@@ -422,16 +417,33 @@ function cleanupFrame(ctx, frame, options = {}, preserveExplicitTrimOverride = n
   }
 
   if (maxX < 0 || maxY < 0) {
-    frame.trim = null;
+    frame.trim = explicitTrim && preserveExplicitTrim ? explicitTrim : null;
     return;
   }
 
-  frame.trim = {
+  const computedTrim = {
     x: minX,
     y: minY,
     w: maxX - minX + 1,
     h: maxY - minY + 1,
   };
+
+  if (explicitTrim && preserveExplicitTrim) {
+    const explicitRight = explicitTrim.x + explicitTrim.w;
+    const explicitBottom = explicitTrim.y + explicitTrim.h;
+    const computedRight = computedTrim.x + computedTrim.w;
+    const computedBottom = computedTrim.y + computedTrim.h;
+    const computedFitsExplicit =
+      computedTrim.x >= explicitTrim.x &&
+      computedTrim.y >= explicitTrim.y &&
+      computedRight <= explicitRight &&
+      computedBottom <= explicitBottom;
+
+    frame.trim = computedFitsExplicit ? computedTrim : explicitTrim;
+    return;
+  }
+
+  frame.trim = computedTrim;
 }
 
 function prepareSpriteSheet(sheetKey, image, sheetConfig) {

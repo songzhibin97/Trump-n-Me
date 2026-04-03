@@ -213,3 +213,30 @@ Original prompt: 1. 每次游戏最下方有阴影 2. 人物角色腿部虚化�
     - `output/web-game/wp1-final/menu.png`
     - `output/web-game/wp1-final/stage.png`
     - `output/web-game/wp1-final/attack.png`
+
+2026-04-03
+- New review request: inspect current tech stack, then verify/fix three reported defects:
+  - NPC/boss black boxes on movement frames still visible in gameplay.
+  - Kill-heal / boss-heal / stage-reset-heal appears ineffective.
+  - Ranged ice/phone projectile behavior and overall combat feel should favor readable, satisfying, winnable power-fantasy combat.
+- Tech stack re-confirmed: static HTML/CSS/ES module canvas game, no bundler/framework.
+- 2026-04-03 review/fix pass for current report:
+  - Render pipeline:
+    - Tightened enemy/boss/final-boss matte cleanup in `js/sprite-loader.js`.
+    - Changed explicit-trim preservation so cleanup can adopt a tighter computed trim when the cleaned bounds stay inside the authored trim, instead of blindly restoring the old trim.
+    - Validation via browser pixel inspection showed large drops in dark matte residue on boss/finalBoss frames; example: `bosses.walk[0]` dark-pixel count fell from 251 to 23 after the pass.
+  - Sustain / power-fantasy combat:
+    - Added baseline on-hit sustain plus larger kill-heal in `js/combat.js`.
+    - Added visible green heal popups / DRAIN callouts in `js/game.js` so healing reads on screen.
+    - Increased level-transition recovery from 22% to max(`72`, `32% max HP`).
+    - Runtime validation:
+      - stage transition heal check: HP `140 -> 223` while advancing from level 1 to level 2.
+      - live combat sustain check: HP `112 -> 165` during an 8-hit stage-1 combo sequence while score climbed `0 -> 1920`.
+  - Ranged fairness:
+    - Reduced phone/golf/twitter projectile base speeds.
+    - Added target jitter and lower Y tracking weight in `spawnProjectileToward()` so enemy shots aim once but no longer feel like sticky tracking.
+    - Reduced phone-thrower and twitter-boss phone burst damage/density.
+  - Validation artifacts:
+    - Standard web-game client rerun: `output/web-game/review-after-pass1/shot-0.png`, `output/web-game/review-after-pass1/state-0.json`
+    - Baseline before pass: `output/web-game/review-baseline/shot-0.png`, `output/web-game/review-baseline/state-0.json`
+    - No syntax errors: `node --check js/sprite-loader.js js/combat.js js/game.js js/enemy.js`

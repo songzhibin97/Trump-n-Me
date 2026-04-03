@@ -4,11 +4,17 @@ import { checkAABB } from "./physics.js";
 const PLAYER_RAGE_GAIN = 10;
 const TAKEN_DAMAGE_RAGE_GAIN = 8;
 const RAGE_AUTO_TRIGGER_DELAY = 900;
+const HIT_HEAL = Object.freeze({
+  minion: 3,
+  bodyguard: 5,
+  phoneThrower: 4,
+  boss: 8,
+});
 const KILL_HEAL = Object.freeze({
-  minion: 8,
-  bodyguard: 16,
-  phoneThrower: 12,
-  boss: 28,
+  minion: 16,
+  bodyguard: 22,
+  phoneThrower: 18,
+  boss: 40,
 });
 
 export class CombatSystem {
@@ -52,6 +58,10 @@ export class CombatSystem {
     };
   }
 
+  getSustainAmount(enemy, table) {
+    return enemy.isBossEnemy?.() ? table.boss : table[enemy.type] ?? table.minion;
+  }
+
   getEnemyCenter(enemy) {
     return {
       x: enemy.x + enemy.width / 2,
@@ -86,6 +96,7 @@ export class CombatSystem {
     const knockbackY = options.knockbackY ?? attack.knockbackY;
     const attackType = options.attackType ?? attack.attackType;
     const result = enemy.takeHit(damage, knockbackX, knockbackY, attackType);
+    let healApplied = 0;
 
     if (result.damage <= 0) {
       return null;
@@ -96,17 +107,25 @@ export class CombatSystem {
 
     if (options.heal) {
       player.restoreHp(options.heal);
+      healApplied += options.heal;
+    }
+
+    const sustainHeal = options.sustainHeal ?? this.getSustainAmount(enemy, HIT_HEAL);
+    if (sustainHeal > 0) {
+      player.restoreHp(sustainHeal);
+      healApplied += sustainHeal;
     }
 
     if (result.killed) {
-      const heal =
-        enemy.isBossEnemy?.()
-          ? KILL_HEAL.boss
-          : KILL_HEAL[enemy.type] ?? KILL_HEAL.minion;
-      player.restoreHp(heal);
+      const killHeal = this.getSustainAmount(enemy, KILL_HEAL);
+      player.restoreHp(killHeal);
+      healApplied += killHeal;
     }
 
-    const record = this.createHitRecord(enemy, result, attackType, options.extra ?? {});
+    const record = this.createHitRecord(enemy, result, attackType, {
+      heal: healApplied,
+      ...(options.extra ?? {}),
+    });
     hits.push(record);
     return record;
   }
