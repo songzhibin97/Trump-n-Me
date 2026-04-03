@@ -1,6 +1,10 @@
 Original prompt: 1. 每次游戏最下方有阴影 2. 人物角色腿部虚化，发动技能下半身直接没了 3. npc行为单一 4. 场景好像多个图层重叠？
 
 2026-04-03
+- GitHub Pages release setup:
+  - Added `.github/workflows/deploy-pages.yml` so pushes to `main` deploy this static site through GitHub Actions.
+  - Added `.nojekyll` to keep GitHub Pages from running Jekyll over the repository contents.
+  - Remote already points at `git@github.com:songzhibin97/Trump-n-Me.git`, so the remaining manual step is enabling Pages with `Source: GitHub Actions` in the GitHub repo settings.
 - NPC black-box defect pass:
   - Confirmed the project remains a static HTML/CSS/ES module canvas game with no bundler or framework runtime.
   - Found a concrete render-pipeline bug in `js/sprite-loader.js`:
