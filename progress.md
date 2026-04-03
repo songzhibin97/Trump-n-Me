@@ -1,0 +1,211 @@
+Original prompt: 1. 每次游戏最下方有阴影 2. 人物角色腿部虚化，发动技能下半身直接没了 3. npc行为单一 4. 场景好像多个图层重叠？
+
+2026-04-03
+- NPC black-box defect pass:
+  - Confirmed the project remains a static HTML/CSS/ES module canvas game with no bundler or framework runtime.
+  - Found a concrete render-pipeline bug in `js/sprite-loader.js`:
+    - runtime cleanup was iterating `CUSTOM_ENEMY_ANIMATIONS` across the wrong sheet, so unrelated custom enemy frames had their authored `trim` metadata overwritten;
+    - this was corrupting attack-frame crop data for NPCs such as `bodyguard`, and also mutating boss custom-frame trim state.
+  - Fixes applied:
+    - limited cleanup to custom animations that actually belong to the current sprite sheet;
+    - preserved explicit authored `trim` metadata while still allowing pixel cleanup on minion-sheet frames;
+    - extended edge seeding so bottom-edge background noise can also be cleared when bottom-row protection is disabled.
+  - Follow-up alpha cleanup:
+    - confirmed via raw-vs-prepared frame comparisons that `bodyguard`/`minion` attack cells still contained dirty semi-transparent pixels even when trim was correct;
+    - added a minion-sheet alpha hardening pass so very low-alpha residue is dropped and remaining sprite pixels are snapped opaque, which removes the ghosted/dirty attack silhouette in gameplay.
+  - Additional minion/boss cleanup split:
+    - separated base `minion` frames from custom `bodyguard` frames so regular NPC sprites can be auto-trimmed while `bodyguard` keeps its authored trim;
+    - enabled the cleanup pipeline for `bosses` and `finalBoss` sheets, which had accidentally been excluded before;
+    - increased boss alpha/matte cleanup so boss movement frames no longer drag obvious black matte blocks behind them.
+  - Verification:
+    - `node --check js/sprite-loader.js`
+    - browser-evaluated trim inspection now shows `bodyguard` / `miniBoss` / `golfBoss` custom attack frames retaining correct non-null trim data
+    - static scene validation artifact:
+      - `output/web-game/bodyguard-scene.png`
+      - `output/web-game/bodyguard-scene-2x-c.png`
+    - gameplay regression artifacts:
+      - `output/web-game/npc-blackbox-final/shot-0.png`
+      - `output/web-game/npc-blackbox-final/state-0.json`
+      - `output/web-game/npc-blackbox-final-2/shot-0.png`
+      - `output/web-game/npc-blackbox-final-2/state-0.json`
+      - `output/web-game/user-repro-check-2/near-4.png`
+      - `output/web-game/boss-scene-4176c/boss-0.png`
+      - `output/web-game/boss-scene-4176c/boss-2.png`
+    - no `errors-*.json` files were produced in the latest standard client run.
+- Initial triage started for four reported issues: bottom shadow, lower-body blur/disappearance, simplistic NPC behavior, and possible background layer overlap.
+- Confirmed project is a static HTML/CSS/JS canvas game with no build tooling.
+- Next step: run local server, inspect gameplay/screenshots, and identify root causes in rendering and AI logic.
+- Installed Playwright runtime under the `develop-web-game` skill directory and downloaded Chromium so browser-based validation can run without changing this repo.
+- Root causes found:
+  - Global bottom shadow came from `drawGround()` plus an extra dark overlay in `Camera.drawParallaxBg()`.
+  - Background overlap came from drawing the same background sheet multiple times with alpha offsets to fake parallax.
+  - Character blur was amplified by browser-level canvas scaling without pixel-art rendering hints.
+  - Melee NPCs spent too much time standing still during cooldown/prepare windows, so encounters felt single-pattern.
+- Implemented fixes:
+  - Simplified background rendering to one clean scene layer plus a light atmospheric haze.
+  - Reworked ground shading to remove the heavy dark band at the bottom.
+  - Switched canvas presentation to pixel-art friendly scaling (`image-rendering`) and integer-ish display sizing.
+  - Added deterministic debug/test hooks: `window.advanceTime(ms)` and `window.render_game_to_text()`.
+- Added melee NPC lane-shifting, pressure/retreat spacing, and occasional dash-ins for bodyguards/mini-bosses.
+- Validation:
+  - Ran Playwright against `http://127.0.0.1:4173`.
+  - Generated screenshot: `output/web-game/post-fix-1/shot-0.png`.
+  - Generated state text: `output/web-game/post-fix-1/state-0.json`.
+  - No new console/page errors were emitted during the run.
+- Follow-up pass for user feedback about boss hit range, black boxes, and rough in-game presentation:
+  - Strengthened sprite cleanup so dark cell backgrounds on enemy/boss sheets are trimmed instead of being drawn as visible black boxes.
+  - Tightened enemy/boss hurtboxes and melee origins so hits land closer to the visible model.
+  - Reduced several boss melee/slam reach values to better match animation silhouettes.
+  - Restyled gameplay HUD/weapon/boss panels to move away from heavy flat black rectangles.
+- Additional validation:
+  - Verified updated trims via browser-evaluated sprite metadata after asset load.
+  - Generated manual Playwright screenshots:
+    - `output/web-game/post-fix-2/stage1.png`
+    - `output/web-game/post-fix-2/boss-close.png`
+  - Ran the standard web-game Playwright client again:
+    - `output/web-game/post-fix-client/shot-0.png`
+    - `output/web-game/post-fix-client/state-0.json`
+  - No `errors-*.json` files were produced in the latest client run.
+- Gameplay follow-up for “weapons/items feel useless / gameplay is too single”:
+  - Reworked item configs so each pickup now changes combat behavior instead of only applying hidden stat multipliers.
+  - Implemented weapon roles:
+    - Golf Club: heavy cleave splash.
+    - MAGA Hat: stronger rage gain and low-HP finisher.
+    - Twitter Phone: heavy attacks chain damage to nearby enemies.
+    - Golden Wig: heal on hit plus crown shockwave on stronger attacks.
+  - Added small weapon proc feedback and expanded HUD weapon panel copy so the player can actually tell what the current item does.
+- Validation:
+  - Ran syntax checks on all modified gameplay files.
+  - Generated targeted weapon screenshots:
+    - `output/web-game/weapon-pass/golf-club.png`
+    - `output/web-game/weapon-pass/twitter-phone.png`
+  - Ran the standard web-game Playwright client:
+    - `output/web-game/weapon-client/shot-0.png`
+    - `output/web-game/weapon-client/state-0.json`
+  - No `errors-*.json` files were produced in the latest weapon regression run.
+- Correction pass after user reported the build still looked wrong in-browser:
+  - Reverted the canvas display scaling experiment and restored DPR-backed rendering because that change degraded clarity and menu presentation.
+  - Split sprite cleanup into hero-safe vs enemy/boss cleanup profiles so feet/legs are protected while dark enemy sheet backdrops can still be removed.
+  - Increased melee dash frequency for regular minions so their behavior reads less static.
+  - Made item effects more aggressive and visible, including passive rage gain on MAGA Hat and broader proc conditions on the other pickups.
+  - Bumped `index.html` entry version from `?v=789` to `?v=790` and started a fresh server on port `4174` to bypass stale browser cache.
+- Validation:
+  - Syntax-checked modified files.
+  - Captured fresh screenshots from `http://127.0.0.1:4174`, including `output/web-game/recheck/menu-4174.png`.
+- WP1 accepted after direct final correction:
+  - Removed code-drawn ground darkening by stopping `drawGround()` from painting menu/gameplay shadows and by no longer calling it in scene rendering.
+  - Fixed the core `minion` sheet mapping bug: the runtime had been treating the hammer-attack row as walk frames.
+  - Restored NPC rendering by combining correct minion frame mapping with non-hero sprite background cleanup, which removed the large black rectangles behind enemies.
+  - Kept player/menu clarity on the DPR-backed canvas path and retained the attack-duration change so player moves play through more of their source frames.
+- Final WP1 acceptance artifacts:
+  - `output/web-game/wp1-main-fix-2/menu.png`
+  - `output/web-game/wp1-main-fix-2/stage.png`
+  - `output/web-game/wp1-main-fix-2/attack.png`
+- WP2 accepted after local acceptance pass:
+  - Enemy roles are now separated more clearly:
+    - `minion`: faster pressure and short engage/disengage rhythm.
+    - `bodyguard`: armored bruiser with heavier committed attacks.
+    - `phoneThrower`: stronger retreat + burst projectile zoning.
+    - `miniBoss`: clearer dash/slam pressure.
+    - `golfBoss`: mid-range orbit + ball pressure, melee only when close.
+    - `twitterBoss`: stronger zoning identity with denser projectile patterns and beam preference.
+    - `finalBoss`: phases now shift pacing and pressure more noticeably.
+  - Fairness work kept or improved: attack windows, hurtboxes, reach/origin insets, and super-armor damage reduction on selected heavy enemies.
+- Final WP2 acceptance artifacts:
+  - `output/web-game/wp2-main-accept/bodyguard.png`
+  - `output/web-game/wp2-main-accept/bodyguard-state.json`
+  - `output/web-game/wp2-main-accept/phoneThrower.png`
+  - `output/web-game/wp2-main-accept/phoneThrower-state.json`
+  - `output/web-game/wp2-main-accept/miniBoss.png`
+  - `output/web-game/wp2-main-accept/miniBoss-state.json`
+- WP3 accepted as gameplay-utility baseline:
+  - Pickups now materially alter combat behavior instead of only acting as hidden stat buffs.
+  - `Golf Club`: splash cleave on stronger hits.
+  - `Twitter Phone`: chaining/propagating hit effect with visible link feedback.
+  - `MAGA Hat`: rage acceleration plus low-HP finisher behavior.
+  - `Golden Wig`: healing and shockwave utility.
+  - HUD weapon panel now explains the active pickup so the player can read the current tool without guessing.
+  - Weapon proc feedback was strengthened (`SWEEP`, `CHAIN`, `CROWN`, `FINISH`) to improve readability.
+- WP3 validation references:
+  - Existing behavior samples:
+    - `output/web-game/weapon-pass/golf-club.png`
+    - `output/web-game/weapon-pass/twitter-phone.png`
+  - Additional local acceptance captures:
+    - `output/web-game/wp3-burst-2/golf-3.png`
+    - `output/web-game/wp3-burst-2/twitter-3.png`
+  - Residual note: pickup utility is now real, but WP4 still needs to make the visual feedback and pickup presentation feel more intentional.
+- WP4 accepted after final integration pass:
+  - Pickup/world presentation now uses item-specific showcase art instead of mismatched placeholder-style icons.
+  - Weapon panel and world pickups now speak the same visual language, with item-specific art, accents, and descriptions aligned to the actual pickup.
+  - Menu / gameplay / boss screenshots are now closer in finish level, so the build reads more like one product rather than menu-vs-game mismatch.
+  - Fixed a real integration issue in `ui.js` where `getSpriteAnimation` usage was missing the import during the first WP4 validation attempt.
+- Final WP4 acceptance artifacts:
+  - `output/web-game/wp4-main-accept/menu.png`
+  - `output/web-game/wp4-main-accept/gameplay.png`
+  - `output/web-game/wp4-main-accept/boss.png`
+  - `output/web-game/wp4-main-accept/boss-state.json`
+- Post-acceptance defect pass based on new playtest feedback:
+  - Tightened enemy vertical lane targeting so NPCs stay much closer to the player lane and no longer drift far below the player.
+  - Removed enemy hit-state alpha flicker, which was contributing to visible black-box artifacts and distracting flashing.
+  - Increased common enemy animation richness by broadening minion walk-frame usage and speeding up minion idle/walk/attack playback.
+  - Corrected item showcase usage so the weapon panel now shows matching large art for club/hat/phone/wig instead of mismatched pickup images.
+- Follow-up validation:
+  - `output/web-game/fix-followup/stage.png`
+  - `output/web-game/fix-followup/bodyguard.png`
+  - `output/web-game/final-regression/shot-0.png`
+- Additional playtest fix pass:
+  - Aligned enemy render anchoring to `baseY` so NPCs visually stand on the same lane they logically occupy.
+  - Unified player movement lane limits with enemy lanes and pushed player attack boxes downward to better match body-height contact.
+  - Extended death presentations by slowing death animations, adding corpse hold time, and preventing level progression until death animations have actually cleared.
+- WP8 accepted:
+  - Boss phase transitions now have phase-specific audio stings, stronger banner/flash treatment, and HP-bar emphasis during the transition window.
+  - Existing kill-feedback chain was preserved and carried forward into the next polish layer.
+  - Acceptance artifacts:
+    - `output/web-game/wp8-pass/phase.png`
+    - `output/web-game/wp8-pass/phase-state.json`
+- Combat-feel package accepted:
+  - Sustain:
+    - Player max HP increased from `200` to `260`.
+    - Kill-heal is now applied in combat on enemy defeat.
+    - Stage-clear heal restores a chunk of HP before the next stage.
+  - Durability:
+    - Enemy health raised to make fights breathe more:
+      - `MINION_HP` -> `55`
+      - `BOSS_HP` -> `220`
+      - `FINAL_BOSS_HP` -> `420`
+  - Combo pressure:
+    - Minions, bodyguards, miniBoss, and finalBoss attack profiles now include chained pressure / combo-step behavior rather than single isolated hits.
+  - Hit feel:
+    - Added stronger boss crack feedback, screenshake, kill stings, and kill banners on top of the previous combat effects.
+- Combat-feel validation artifacts:
+  - `output/web-game/feel-pass/stage-clear-heal.png`
+  - `output/web-game/feel-pass/stage-clear-heal-state.json`
+  - `output/web-game/feel-pass/combat-pressure.png`
+  - `output/web-game/feel-pass/combat-pressure-state.json`
+  - `output/web-game/feel-pass/boss-pressure.png`
+  - `output/web-game/feel-pass/boss-pressure-state.json`
+- Spectacle/content follow-up:
+  - Added dedicated boss phase-shift audio and expanded transition presentation with banner overlays, stronger flash/ring treatment, and HP-bar phase emphasis.
+  - Added kill-feedback banners and kill stings differentiated across minion/bodyguard/boss kills.
+  - Added wave callouts and expanded wave structure so stages now have more event/pacing variation instead of immediately jumping from two simple waves into a boss.
+  - Expanded stages 2-4 with an extra wave and more mixed compositions/offset spawns.
+- Validation artifacts:
+  - `output/web-game/final-content-pass/phase-transition.png`
+  - `output/web-game/final-content-pass/phase-after.png`
+  - `output/web-game/final-content-pass/wave-callout.png`
+  - `output/web-game/content-pass/stage2-wave1.png`
+  - `output/web-game/content-pass/stage2-wave2.png`
+  - `output/web-game/content-pass/stage2-wave3.png`
+- WP1 render-pipeline rework:
+  - Removed code-painted ground darkening from menu and gameplay so scene brightness now relies on background art rather than an extra mud layer.
+  - Replaced runtime NPC/boss border guessing with explicit trim data:
+    - Added deterministic trim metadata for `minion`, `bosses`, and `finalBoss` animations in `js/sprite-config.js`.
+    - Added deterministic trim metadata for custom boss animation frames in `js/enemy.js`.
+    - Limited runtime cleanup in `js/sprite-loader.js` to `heroes` only.
+  - Made player attack duration derive from actual animation frame data, so attacks can play through their richer frame ranges.
+- WP1 validation:
+  - Syntax checks passed for `js/sprite-config.js`, `js/enemy.js`, `js/sprite-loader.js`, `js/game.js`, and `js/player.js`.
+  - Saved browser screenshots from `http://127.0.0.1:4174`:
+    - `output/web-game/wp1-final/menu.png`
+    - `output/web-game/wp1-final/stage.png`
+    - `output/web-game/wp1-final/attack.png`
